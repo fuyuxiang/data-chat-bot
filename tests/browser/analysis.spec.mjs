@@ -83,14 +83,14 @@ test('opens grounded evidence and downloads a published artifact', async ({ page
 
 test('builds and validates an approved semantic metric from the UI', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: '数据目录' }).click();
+  await page.getByRole('button', { name: '数据连接' }).click();
   await page.locator('input[type=file][accept*=".csv"]').setInputFiles({
     name: 'sales.csv', mimeType: 'text/csv',
     buffer: Buffer.from('region,month,sales\nNorth,2026-01-01,120\nSouth,2026-01-01,90\n'),
   });
   await expect(page.getByText('sales', { exact: true }).first()).toBeVisible();
 
-  await page.getByRole('button', { name: '指标中心' }).click();
+  await page.getByRole('button', { name: '指标治理' }).click();
   await page.getByRole('button', { name: '新建语义模型' }).click();
   await page.getByLabel('模型名称').fill('销售事实模型');
   await page.getByRole('button', { name: '保存并校验' }).click();
