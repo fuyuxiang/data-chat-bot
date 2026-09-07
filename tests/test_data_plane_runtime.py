@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 
+import pandas as pd
 import pytest
 import requests
 
@@ -10,6 +11,7 @@ from backend.services.data_plane.livy import LivyBatchAdapter, LivyConfig
 from backend.services.data_plane.sandbox import SandboxLimits, SandboxRunner, SandboxUnavailable
 from backend.services.data_plane.sandbox_client import SandboxClient
 from backend.services.data_plane.trino import TrinoAdapter, TrinoConfig
+from deploy.sandbox.run_job import _parquet_safe_frame
 
 
 class Response:
@@ -27,6 +29,33 @@ class Response:
         if isinstance(self.value, Exception):
             raise self.value
         return self.value
+
+
+def test_sandbox_describe_result_with_categorical_values_is_parquet_safe(tmp_path):
+    frame = pd.DataFrame({"group": ["a", "a", "b"], "value": [1, 2, 3]})
+
+    result = _parquet_safe_frame(frame.describe(include="all").reset_index())
+    target = tmp_path / "result.parquet"
+    result.to_parquet(target, index=False)
+    restored = pd.read_parquet(target)
+
+    assert str(result["group"].dtype) == "string"
+    assert restored.loc[2, "group"] == "a"
+    assert pd.isna(restored.loc[4, "group"])
+
+
+def test_sandbox_grouped_result_has_flat_unique_parquet_columns():
+    frame = pd.DataFrame({"group": ["a", "a", "b"], "value": [1, 2, 3]})
+    grouped = frame.groupby("group", dropna=False).agg(["count", "mean"]).reset_index()
+
+    result = _parquet_safe_frame(grouped)
+
+    assert result.columns.tolist() == ["group", "value_count", "value_mean"]
+    collision = pd.DataFrame([[1, 2]], columns=pd.MultiIndex.from_tuples([
+        ("value", "count"), ("value_count", ""),
+    ]))
+    with pytest.raises(ValueError, match="duplicate column names"):
+        _parquet_safe_frame(collision)
 
 
 def test_trino_statement_protocol_catalog_query_materialization_and_cancel(app, monkeypatch):

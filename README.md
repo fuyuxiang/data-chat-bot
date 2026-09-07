@@ -273,8 +273,11 @@ python scripts/restore.py storage/backups/meridian-YYYYMMDDTHHMMSSZ.tar.gz.enc \
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
+python -m pip install --require-hashes -r requirements-dev.lock
 ```
+
+`requirements-dev.in` 保存直接开发依赖，`requirements-dev.txt` 是兼容安装入口。修改 `.in` 后使用
+`requirements-dev.lock` 文件头记录的命令重新生成锁文件。
 
 ### 后端质量检查
 

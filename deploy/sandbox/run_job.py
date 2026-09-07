@@ -40,6 +40,25 @@ def _validate_frame(frame: pd.DataFrame, label: str) -> None:
             raise ValueError(f"bounded {label} contains an oversized value")
 
 
+def _parquet_safe_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy with stable column names and Arrow-compatible mixed values."""
+    result = frame.copy()
+    result.columns = [
+        "_".join(str(part) for part in column if part is not None and str(part))
+        if isinstance(column, tuple) else str(column)
+        for column in result.columns
+    ]
+    if any(not column for column in result.columns):
+        raise ValueError("output contains an empty column name")
+    if result.columns.has_duplicates:
+        raise ValueError("output contains duplicate column names after normalization")
+    for column in result.select_dtypes(include=["object", "string"]).columns:
+        inferred = pd.api.types.infer_dtype(result[column].dropna(), skipna=True)
+        if inferred.startswith("mixed"):
+            result[column] = result[column].astype("string")
+    return result
+
+
 def main() -> int:
     spec_path = Path(sys.argv[1]).resolve()
     if spec_path.parent != Path("/output") or not spec_path.is_file():
@@ -85,7 +104,7 @@ def main() -> int:
         if group not in frame.columns:
             raise ValueError("group column does not exist")
         result = frame.groupby(group, dropna=False).agg(["count", "mean"]).reset_index()
-        result.columns = ["_".join(str(part) for part in item if part) if isinstance(item, tuple) else str(item) for item in result.columns]
+    result = _parquet_safe_frame(result)
     _validate_frame(result, "output")
     target = Path("/output/result.parquet")
     result.to_parquet(target, index=False)
